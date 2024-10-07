@@ -19,3 +19,14 @@ class UserSerializer(serializers.ModelSerializer):
         return user
     
 
+from django.contrib.auth.forms import PasswordResetForm
+from rest_framework import serializers
+
+class PasswordResetSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        # Eğer e-posta yoksa hata döner
+        if not PasswordResetForm({'email': value}).is_valid():
+            raise serializers.ValidationError("Bu e-posta kayıtlı değil.")
+        return value

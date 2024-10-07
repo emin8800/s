@@ -184,6 +184,8 @@ application = get_wsgi_application()
 
 
 
+
+#Google Oath2
 AUTHENTICATION_BACKENDS = (
     'social_core.backends.google.GoogleOAuth2',
     'django.contrib.auth.backends.ModelBackend',
@@ -200,3 +202,16 @@ SOCIAL_AUTH_GOOGLE_OAUTH2_SCOPE = [
     'https://www.googleapis.com/auth/userinfo.profile',
     'https://www.googleapis.com/auth/userinfo.email',
 ]
+
+
+
+#Password Reset
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'  # SMTP sunucunuzun adresi
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'hesenovemin58@gmail.com'  # Gönderen e-posta adresi
+EMAIL_HOST_PASSWORD = 'pifz evdi lckd dpyj'
+
+SITE_ID = 1

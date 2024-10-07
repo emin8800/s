@@ -61,6 +61,31 @@ def csrf_token(request):
 
 
 
+from django.contrib.auth.models import User
+from django.contrib.auth.forms import PasswordResetForm
+from django.conf import settings
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from rest_framework import status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .serializers import PasswordResetSerializer
+
+class PasswordResetAPIView(APIView):
+    def post(self, request):
+        serializer = PasswordResetSerializer(data=request.data)
+        if serializer.is_valid():
+            # Şifre sıfırlama işlemini başlat
+            form = PasswordResetForm(serializer.validated_data)
+            if form.is_valid():
+                form.save(
+                    request=request,
+                    use_https=False,  # https kullanıyorsan True yapabilirsin
+                    email_template_name='registration/password_reset_email.html',
+                    from_email=settings.DEFAULT_FROM_EMAIL
+                )
+                return Response({'message': 'Şifre sıfırlama e-postası gönderildi.'}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -179,6 +204,4 @@ def google_login(request):
     except Exception as e:
         print("Internal server error:", str(e))  # Hata ayıklama için
         return Response({'error': 'Internal server error', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
 

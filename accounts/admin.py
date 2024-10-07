@@ -5,3 +5,9 @@ from .models import CustomUser
 class CustomUserAdmin(admin.ModelAdmin):
     list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'is_active')
     search_fields = ('username', 'email')
+
+
+admin.site.site_header = 'FeedSync AdminPanel'
+
+
+admin.site.index_title = 'FeedSync'
