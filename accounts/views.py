@@ -141,7 +141,7 @@ class PasswordResetAPIView(APIView):
 
 
 
-####2ci
+# ####2ci
 import requests
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -150,24 +150,69 @@ from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from django.utils.text import slugify  # Kullanıcı adı için
 from .models import CustomUser
 
+# @api_view(['POST'])
+# def google_login(request):
+#     try:
+#         token = request.data.get('token')
+
+#         if not token:
+#             return Response({'error': 'Token not provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+#         # Google token doğrulaması
+#         google_response = requests.get(f'https://oauth2.googleapis.com/tokeninfo?id_token={token}')
+
+#         if google_response.status_code != 200:
+#             return Response({'error': 'Invalid or expired token'}, status=status.HTTP_401_UNAUTHORIZED)
+
+#         google_data = google_response.json()
+#         print("Google Data:", google_data)  # Hata ayıklama için
+
+#         email = google_data.get('email')
+#         if not email:
+#             return Response({'error': 'Email not provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+#         # Kullanıcıyı veritabanında bul veya oluştur
+#         user, created = CustomUser.objects.get_or_create(email=email)
+
+#         if created:
+#             # Yeni kullanıcıysa, username ve diğer bilgileri ayarlayın
+#             first_name = google_data.get('given_name', '')
+#             last_name = google_data.get('family_name', '')
+
+#             username = slugify(f'{first_name} {last_name}'[:30])  # max 30 karakter
+#             user.username = username if username else email  # Username boşsa email kullan
+#             user.first_name = first_name
+#             user.last_name = last_name
+
+#             # Kullanıcıyı kaydet
+#             try:
+#                 user.save()
+#             except Exception as e:
+#                 print("User creation error:", str(e))  # Hata ayıklama için
+#                 return Response({'error': 'User creation failed', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+#         # JWT Token oluşturma
+#         access = AccessToken.for_user(user)
+#         refresh = RefreshToken.for_user(user)
+
+#         return Response({
+#             'access': str(access),
+#             'refresh': str(refresh),
+#             'message': 'User registered' if created else 'User logged in'
+#         }, status=status.HTTP_200_OK)
+
+#     except Exception as e:
+#         print("Internal server error:", str(e))  # Hata ayıklama için
+#         return Response({'error': 'Internal server error', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['POST'])
 def google_login(request):
     try:
-        token = request.data.get('token')
+        email = request.data.get('email')
+        first_name = request.data.get('first_name')
+        last_name = request.data.get('last_name')
 
-        if not token:
-            return Response({'error': 'Token not provided'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Google token doğrulaması
-        google_response = requests.get(f'https://oauth2.googleapis.com/tokeninfo?id_token={token}')
-
-        if google_response.status_code != 200:
-            return Response({'error': 'Invalid or expired token'}, status=status.HTTP_401_UNAUTHORIZED)
-
-        google_data = google_response.json()
-        print("Google Data:", google_data)  # Hata ayıklama için
-
-        email = google_data.get('email')
         if not email:
             return Response({'error': 'Email not provided'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -175,23 +220,13 @@ def google_login(request):
         user, created = CustomUser.objects.get_or_create(email=email)
 
         if created:
-            # Yeni kullanıcıysa, username ve diğer bilgileri ayarlayın
-            first_name = google_data.get('given_name', '')
-            last_name = google_data.get('family_name', '')
-
-            username = slugify(f'{first_name} {last_name}'[:30])  # max 30 karakter
-            user.username = username if username else email  # Username boşsa email kullan
+            # Yeni kullanıcıysa bilgileri ayarla
             user.first_name = first_name
             user.last_name = last_name
+            user.username = slugify(f'{first_name} {last_name}'[:30]) or email
+            user.save()
 
-            # Kullanıcıyı kaydet
-            try:
-                user.save()
-            except Exception as e:
-                print("User creation error:", str(e))  # Hata ayıklama için
-                return Response({'error': 'User creation failed', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        # JWT Token oluşturma
+        # Kullanıcı için JWT oluşturma
         access = AccessToken.for_user(user)
         refresh = RefreshToken.for_user(user)
 
@@ -202,6 +237,4 @@ def google_login(request):
         }, status=status.HTTP_200_OK)
 
     except Exception as e:
-        print("Internal server error:", str(e))  # Hata ayıklama için
         return Response({'error': 'Internal server error', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
