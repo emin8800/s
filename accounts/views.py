@@ -1,210 +1,94 @@
+import random
+import requests
+from drf import settings
+from .models import CustomUser
+from datetime import timedelta
 from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.decorators import api_view
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.views import APIView  # Burada APIView'ı import edin
-from rest_framework_simplejwt.tokens import RefreshToken
 from django.http import JsonResponse
+from django.utils.text import slugify
+from django.core.mail import send_mail
+from .serializers import UserSerializer
+from rest_framework.views import APIView 
+from rest_framework.response import Response
 from django.middleware.csrf import get_token
 from django.contrib.auth import authenticate
-from .serializers import UserSerializer
-from .models import CustomUser
+from rest_framework.decorators import api_view
+from .serializers import PasswordResetSerializer
+from rest_framework.permissions import IsAuthenticated
+from django.contrib.auth.forms import PasswordResetForm
+from rest_framework_simplejwt.tokens import RefreshToken,AccessToken
 
+
+#########################################Register Api#############################################################
 @api_view(['POST'])
 def register_user(request):
     serializer = UserSerializer(data=request.data)
     if serializer.is_valid():
-        serializer.save()
+        user = serializer.save(is_verified=False)  
+    
+        verification_code = random.randint(100000, 999999)
+
+        send_mail(
+            'Doğrulama Kodu',
+            f'Sizin doğrulama kodunuz: {verification_code}',
+            settings.DEFAULT_FROM_EMAIL,  
+            [user.email],
+            fail_silently=False,
+        )
+
+        user.verification_code = verification_code
+        user.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+#########################################Login Api#############################################################
 
 @api_view(['POST'])
 def user_login(request):
     username = request.data.get('username')
     password = request.data.get('password')
-    user = authenticate(username=username, password=password)
+    recaptcha_token = request.data.get('recaptchaToken')
+    remember_me = request.data.get('rememberMe', False) 
 
+    if not recaptcha_token:
+        return Response({'error': 'reCAPTCHA doğrulaması gerekli'}, status=status.HTTP_400_BAD_REQUEST)
+
+    recaptcha_url = "https://www.google.com/recaptcha/api/siteverify"
+    recaptcha_data = {
+        'secret': settings.RECAPTCHA_SECRET_KEY,
+        'response': recaptcha_token
+    }
+
+    recaptcha_response = requests.post(recaptcha_url, data=recaptcha_data)
+    recaptcha_result = recaptcha_response.json()
+
+    if not recaptcha_result.get('success'):
+        return Response({'error': 'reCAPTCHA doğrulaması başarısız'}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = authenticate(username=username, password=password)
     if user:
+        if not user.is_verified:
+            return Response({'error': 'Kullanıcı doğrulanmamış. Lütfen doğrulama kodunu girin.'}, status=status.HTTP_403_FORBIDDEN)
+
         refresh = RefreshToken.for_user(user)
+
+        if remember_me:
+            access_lifetime = timedelta(days=1) 
+        else:
+            access_lifetime = timedelta(minutes=5)  
+
+        access = AccessToken.for_user(user)
+        access.set_exp(lifetime=access_lifetime)
+
         return Response({
             'refresh': str(refresh),
-            'access': str(refresh.access_token),
-            'csrfToken': get_token(request) 
+            'access': str(access),
+            'csrfToken': get_token(request)  
         }, status=status.HTTP_200_OK)
 
-    return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+    return Response({'error': 'Geçersiz kimlik bilgileri'}, status=status.HTTP_401_UNAUTHORIZED)
 
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
-
-class LogoutView(APIView):
-    permission_classes = (IsAuthenticated,)
-
-    def post(self, request):
-        try:
-            refresh_token = request.data.get('refresh')
-            if refresh_token:
-                token = RefreshToken(refresh_token)
-                token.blacklist()  # Token'ı kara listeye ekler
-
-            return Response(status=status.HTTP_205_RESET_CONTENT)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-
-def csrf_token(request):
-    return JsonResponse({'csrfToken': get_token(request)})
-
-
-
-
-from django.contrib.auth.models import User
-from django.contrib.auth.forms import PasswordResetForm
-from django.conf import settings
-from django.core.mail import send_mail
-from django.template.loader import render_to_string
-from rest_framework import status
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from .serializers import PasswordResetSerializer
-
-class PasswordResetAPIView(APIView):
-    def post(self, request):
-        serializer = PasswordResetSerializer(data=request.data)
-        if serializer.is_valid():
-            # Şifre sıfırlama işlemini başlat
-            form = PasswordResetForm(serializer.validated_data)
-            if form.is_valid():
-                form.save(
-                    request=request,
-                    use_https=False,  # https kullanıyorsan True yapabilirsin
-                    email_template_name='registration/password_reset_email.html',
-                    from_email=settings.DEFAULT_FROM_EMAIL
-                )
-                return Response({'message': 'Şifre sıfırlama e-postası gönderildi.'}, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-
-
-
-
-# import requests
-# from rest_framework.decorators import api_view
-# from rest_framework.response import Response
-# from rest_framework import status
-
-# from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
-
-# @api_view(['POST'])
-# def google_login(request):
-#     token = request.data.get('token')
-    
-#     if not token:
-#         return Response({'error': 'Token not provided'}, status=status.HTTP_400_BAD_REQUEST)
-
-#     # Google token doğrulaması
-#     google_response = requests.get(f'https://oauth2.googleapis.com/tokeninfo?id_token={token}')
-
-#     if google_response.status_code != 200:
-#         return Response({'error': 'Invalid or expired token'}, status=status.HTTP_401_UNAUTHORIZED)
-
-#     google_data = google_response.json()
-#     email = google_data.get('email')
-
-#     if not email:
-#         return Response({'error': 'Email not provided'}, status=status.HTTP_400_BAD_REQUEST)
-
-#     # Kullanıcıyı veritabanında bul veya oluştur
-#     user, created = CustomUser.objects.get_or_create(email=email)
-
-#     # JWT Token oluşturma
-#     access = AccessToken.for_user(user)
-#     refresh = RefreshToken.for_user(user)
-
-#     return Response({
-#         'access': str(access),
-#         'refresh': str(refresh)
-#     }, status=status.HTTP_200_OK)
-
-
-
-
-
-
-
-
-
-
-
-
-# ####2ci
-import requests
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
-from django.utils.text import slugify  # Kullanıcı adı için
-from .models import CustomUser
-
-# @api_view(['POST'])
-# def google_login(request):
-#     try:
-#         token = request.data.get('token')
-
-#         if not token:
-#             return Response({'error': 'Token not provided'}, status=status.HTTP_400_BAD_REQUEST)
-
-#         # Google token doğrulaması
-#         google_response = requests.get(f'https://oauth2.googleapis.com/tokeninfo?id_token={token}')
-
-#         if google_response.status_code != 200:
-#             return Response({'error': 'Invalid or expired token'}, status=status.HTTP_401_UNAUTHORIZED)
-
-#         google_data = google_response.json()
-#         print("Google Data:", google_data)  # Hata ayıklama için
-
-#         email = google_data.get('email')
-#         if not email:
-#             return Response({'error': 'Email not provided'}, status=status.HTTP_400_BAD_REQUEST)
-
-#         # Kullanıcıyı veritabanında bul veya oluştur
-#         user, created = CustomUser.objects.get_or_create(email=email)
-
-#         if created:
-#             # Yeni kullanıcıysa, username ve diğer bilgileri ayarlayın
-#             first_name = google_data.get('given_name', '')
-#             last_name = google_data.get('family_name', '')
-
-#             username = slugify(f'{first_name} {last_name}'[:30])  # max 30 karakter
-#             user.username = username if username else email  # Username boşsa email kullan
-#             user.first_name = first_name
-#             user.last_name = last_name
-
-#             # Kullanıcıyı kaydet
-#             try:
-#                 user.save()
-#             except Exception as e:
-#                 print("User creation error:", str(e))  # Hata ayıklama için
-#                 return Response({'error': 'User creation failed', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-#         # JWT Token oluşturma
-#         access = AccessToken.for_user(user)
-#         refresh = RefreshToken.for_user(user)
-
-#         return Response({
-#             'access': str(access),
-#             'refresh': str(refresh),
-#             'message': 'User registered' if created else 'User logged in'
-#         }, status=status.HTTP_200_OK)
-
-#     except Exception as e:
-#         print("Internal server error:", str(e))  # Hata ayıklama için
-#         return Response({'error': 'Internal server error', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+#########################################Google Login Api#############################################################
 
 @api_view(['POST'])
 def google_login(request):
@@ -216,25 +100,112 @@ def google_login(request):
         if not email:
             return Response({'error': 'Email not provided'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Kullanıcıyı veritabanında bul veya oluştur
         user, created = CustomUser.objects.get_or_create(email=email)
 
         if created:
-            # Yeni kullanıcıysa bilgileri ayarla
             user.first_name = first_name
             user.last_name = last_name
-            user.username = slugify(f'{first_name} {last_name}'[:30]) or email
+            user.username = slugify(f'{first_name} {last_name}'[:30]) 
+            user.is_verified = True  
             user.save()
 
-        # Kullanıcı için JWT oluşturma
         access = AccessToken.for_user(user)
         refresh = RefreshToken.for_user(user)
 
         return Response({
             'access': str(access),
             'refresh': str(refresh),
+            'username': user.username, 
             'message': 'User registered' if created else 'User logged in'
         }, status=status.HTTP_200_OK)
 
     except Exception as e:
         return Response({'error': 'Internal server error', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+#########################################Logout Api#############################################################
+
+class LogoutView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request):
+        try:
+            refresh_token = request.data.get('refresh')
+            if refresh_token:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            return Response(status=status.HTTP_205_RESET_CONTENT)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+#########################################Verify Code Api#############################################################
+
+@api_view(['POST'])
+def verify_code(request):
+    email = request.data.get('email')
+    code = request.data.get('code')
+
+    try:
+        user = CustomUser.objects.get(email=email)
+        if user.verification_code == int(code):
+            user.is_verified = True
+            user.verification_code = None  
+            user.save()
+            return Response({"message": "Doğrulama başarılı!"}, status=status.HTTP_200_OK)
+        else:
+            return Response({"error": "Geçersiz kod!"}, status=status.HTTP_400_BAD_REQUEST)
+    except CustomUser.DoesNotExist:
+        return Response({"error": "Kullanıcı bulunamadı!"}, status=status.HTTP_404_NOT_FOUND)
+
+######################################### Resend Verification Code Api#############################################################
+
+@api_view(['POST'])
+def resend_verification_code(request):
+    email = request.data.get('email')
+    
+    try:
+        user = CustomUser.objects.get(email=email)
+        if user.is_verified:
+            return Response({"error": "Kullanıcı zaten doğrulanmış."}, status=status.HTTP_400_BAD_REQUEST)
+
+        verification_code = random.randint(100000, 999999)
+
+        send_mail(
+            'Yeni Doğrulama Kodu',
+            f'Sizin yeni doğrulama kodunuz: {verification_code}',
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            fail_silently=False,
+        )
+
+        user.verification_code = verification_code
+        user.save()
+
+        return Response({"message": "Yeni doğrulama kodu gönderildi."}, status=status.HTTP_200_OK)
+    except CustomUser.DoesNotExist:
+        return Response({"error": "Kullanıcı bulunamadı!"}, status=status.HTTP_404_NOT_FOUND)
+
+######################################### Password Reset Api#############################################################
+
+class PasswordResetAPIView(APIView):
+    def post(self, request):
+        serializer = PasswordResetSerializer(data=request.data)
+        if serializer.is_valid():
+            form = PasswordResetForm(serializer.validated_data)
+            if form.is_valid():
+                form.save(
+                    request=request,
+                    use_https=False,  
+                    email_template_name='registration/password_reset_email.html',
+                    from_email=settings.DEFAULT_FROM_EMAIL
+                )
+                return Response({'message': 'Şifre sıfırlama e-postası gönderildi.'}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+######################################### CSRF-TOKEN Api#############################################################
+
+def csrf_token(request):
+    return JsonResponse({'csrfToken': get_token(request)})
+
+
+
+
