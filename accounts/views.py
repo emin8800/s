@@ -186,20 +186,20 @@ def resend_verification_code(request):
 
 ######################################### Password Reset Api#############################################################
 
-class PasswordResetAPIView(APIView):
-    def post(self, request):
-        serializer = PasswordResetSerializer(data=request.data)
-        if serializer.is_valid():
-            form = PasswordResetForm(serializer.validated_data)
-            if form.is_valid():
-                form.save(
-                    request=request,
-                    use_https=False,  
-                    email_template_name='registration/password_reset_email.html',
-                    from_email=settings.DEFAULT_FROM_EMAIL
-                )
-                return Response({'message': 'Şifre sıfırlama e-postası gönderildi.'}, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+# class PasswordResetAPIView(APIView):
+#     def post(self, request):
+#         serializer = PasswordResetSerializer(data=request.data)
+#         if serializer.is_valid():
+#             form = PasswordResetForm(serializer.validated_data)
+#             if form.is_valid():
+#                 form.save(
+#                     request=request,
+#                     use_https=False,  
+#                     email_template_name='registration/password_reset_email.html',
+#                     from_email=settings.DEFAULT_FROM_EMAIL
+#                 )
+#                 return Response({'message': 'Şifre sıfırlama e-postası gönderildi.'}, status=status.HTTP_200_OK)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 ######################################### CSRF-TOKEN Api#############################################################
 
@@ -207,5 +207,60 @@ def csrf_token(request):
     return JsonResponse({'csrfToken': get_token(request)})
 
 
+########################################################################################################################
 
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
+from django.template.loader import render_to_string
+from django.core.mail import send_mail
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.contrib.auth.models import User
+from .models import CustomUser
+from django.utils.http import urlsafe_base64_decode
 
+class PasswordResetRequestView(APIView):
+    def post(self, request):
+        email = request.data.get("email")
+        try:
+            user = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            return Response({"error": "Kullanıcı bulunamadı."}, status=status.HTTP_404_NOT_FOUND)
+
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+
+        # E-posta içeriğini oluştur
+        subject = "Şifre Sıfırlama Talebi"
+        message = render_to_string('password_reset_email.html', {
+            'uid': uid,
+            'token': token,
+            'user': user,
+        })
+        send_mail(subject, message, 'your_email@example.com', [user.email])
+
+        return Response({"success": "Şifre sıfırlama bağlantısı e-posta ile gönderildi."}, status=status.HTTP_200_OK)
+
+class PasswordResetConfirmView(APIView):
+    def post(self, request, uidb64, token):
+        new_password = request.data.get("new_password")
+        re_new_password = request.data.get("re_new_password")
+
+        # Şifrelerin eşleşip eşleşmediğini kontrol et
+        if new_password != re_new_password:
+            return Response({"error": "Şifreler eşleşmiyor."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            uid = urlsafe_base64_decode(uidb64).decode()
+            user = CustomUser.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, CustomUser.DoesNotExist):
+            user = None
+
+        if user is not None and default_token_generator.check_token(user, token):
+            user.set_password(new_password)
+            user.save()
+            return Response({"success": "Şifreniz başarıyla sıfırlandı."}, status=status.HTTP_200_OK)
+        else:
+            return Response({"error": "Geçersiz bağlantı."}, status=status.HTTP_400_BAD_REQUEST)

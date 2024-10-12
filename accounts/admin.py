@@ -4,7 +4,7 @@ from django.contrib.auth.admin import UserAdmin
 
 @admin.register(CustomUser)
 class CustomUserAdmin(admin.ModelAdmin):
-    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'is_active','telephone')
+    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'is_active','telephone','uid')
     search_fields = ('username', 'email')
 
     fieldsets = UserAdmin.fieldsets + (

@@ -44,7 +44,7 @@ ROOT_URLCONF = 'drf.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -161,7 +161,13 @@ CORS_ALLOWED_ORIGINS = [
     
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+]
+
 RECAPTCHA_SECRET_KEY = '6Lcyf1kqAAAAADiqG8xyZKEgncD_beju5ze4SHTL'
 
 DEFAULT_FROM_EMAIL="hesenovemin58@gmail.com"
+
+PASSWORD_RESET_CONFIRM_URL = 'reset-password/{uid}/{token}/'
 
