@@ -31,4 +31,3 @@ class PasswordResetSerializer(serializers.Serializer):
         if not PasswordResetForm({'email': value}).is_valid():
             raise serializers.ValidationError("Bu e-posta kayıtlı değil.")
         return value
-

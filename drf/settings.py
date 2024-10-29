@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'knox',
     'corsheaders',
+    
     'accounts'
 ]
 
@@ -65,6 +66,23 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'mssql',
+#         'NAME': 'Django_Users',
+#         'USER': 'sa',
+#         'PASSWORD': '1234',
+#         'HOST': 'localhost',  # veya veritabanı sunucusunun adresi
+#         'PORT': '',  # genelde boş bırakılır
+#         'OPTIONS': {
+#             'driver': 'ODBC Driver 17 for SQL Server',
+#         },
+#     }
+# }
+
+
+
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -132,6 +150,7 @@ application = get_wsgi_application()
 AUTHENTICATION_BACKENDS = (
     'social_core.backends.google.GoogleOAuth2',
     'django.contrib.auth.backends.ModelBackend',
+    'accounts.backends.EmailBackend',
 )
 
 SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = '286708494680-kr58nse7b0as95s1nvcii106hjcl106l.apps.googleusercontent.com'
@@ -170,4 +189,3 @@ RECAPTCHA_SECRET_KEY = '6Lcyf1kqAAAAADiqG8xyZKEgncD_beju5ze4SHTL'
 DEFAULT_FROM_EMAIL="hesenovemin58@gmail.com"
 
 PASSWORD_RESET_CONFIRM_URL = 'reset-password/{uid}/{token}/'
-
