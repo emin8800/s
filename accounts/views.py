@@ -249,22 +249,44 @@ class LogoutView(APIView):
 
 #########################################Verify Code Api#############################################################
 
+# @api_view(['POST'])
+# def verify_code(request):
+#     email = request.data.get('email')
+#     code = request.data.get('code')
+
+#     try:
+#         user = CustomUser.objects.get(email=email)
+#         if user.verification_code == int(code):
+#             user.is_verified = True
+#             user.verification_code = None  
+#             user.save()
+#             return Response({"message": "Doğrulama başarılı!"}, status=status.HTTP_200_OK)
+#         else:
+#             return Response({"error": "Geçersiz kod!"}, status=status.HTTP_400_BAD_REQUEST)
+#     except CustomUser.DoesNotExist:
+#         return Response({"error": "Kullanıcı bulunamadı!"}, status=status.HTTP_404_NOT_FOUND)
+
 @api_view(['POST'])
 def verify_code(request):
     email = request.data.get('email')
     code = request.data.get('code')
 
-    try:
-        user = CustomUser.objects.get(email=email)
-        if user.verification_code == int(code):
-            user.is_verified = True
-            user.verification_code = None  
-            user.save()
-            return Response({"message": "Doğrulama başarılı!"}, status=status.HTTP_200_OK)
-        else:
-            return Response({"error": "Geçersiz kod!"}, status=status.HTTP_400_BAD_REQUEST)
-    except CustomUser.DoesNotExist:
-        return Response({"error": "Kullanıcı bulunamadı!"}, status=status.HTTP_404_NOT_FOUND)
+    # Kullanıcıyı bul
+    user = CustomUser.objects.filter(email=email).first()
+
+    if not user:
+        return Response({"error": "Kullanıcı bulunamadı!"}, status=400)
+    
+    # Doğrulama kodu ile karşılaştırma yap
+    if user.verification_code != code:
+        return Response({"error": "Geçersiz kod!"}, status=400)
+
+    # Kod doğruysa kullanıcıyı doğrula
+    user.is_verified = True
+    user.save()
+
+    return Response({"message": "Başarıyla doğrulandı!"}, status=200)
+
 
 ######################################### Resend Verification Code Api#############################################################
 

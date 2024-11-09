@@ -67,19 +67,6 @@ DATABASES = {
     }
 }
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'mssql',
-#         'NAME': 'Django_Users',
-#         'USER': 'sa',
-#         'PASSWORD': '1234',
-#         'HOST': 'localhost',  # veya veritabanı sunucusunun adresi
-#         'PORT': '',  # genelde boş bırakılır
-#         'OPTIONS': {
-#             'driver': 'ODBC Driver 17 for SQL Server',
-#         },
-#     }
-# }
 
 
 
